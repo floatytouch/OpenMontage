@@ -39,7 +39,7 @@ quality require live validation in the intended environment.
 | 1 | **$0** | Pexels + Pixabay | Stock photos and videos — enough to produce basic videos |
 | 2 | **$0** | Google API key | TTS with 700+ voices (1M chars/month free) + $300 new account credit |
 | 3 | **$0** | ElevenLabs | Premium TTS + music + SFX (10K chars/month free) |
-| 4 | **$0** | Piper (local install) | Fully offline TTS — no API key, no cost, no network |
+| 4 | **$0** | `pip install edge-tts` (no key) | Free neural TTS incl. Vietnamese; Piper (local install) is the offline fallback |
 | 5 | **~$0.03/image** | fal.ai | FLUX images + Kling/Veo/MiniMax video + Recraft — broad single-key image + video coverage |
 | 6 | **~$0.05/image** | OpenAI | GPT Image 2 images + OpenAI TTS |
 | 7 | **~$0.04/image** | Google Imagen | Imagen 4 images (shares the Google API key) |
@@ -1205,6 +1205,23 @@ HyperFrames workspaces live under `projects/<project-name>/hyperframes/`. Final 
 
 ---
 
+### Edge TTS — Free Neural Text-to-Speech (default free engine)
+
+> **Free, no API key.** Unofficial Microsoft Edge read-aloud voices via the `edge-tts` package. Falls back to Piper automatically when the service fails or there is no network.
+
+**Tool:** `edge_tts`
+**Runtime:** network (text is sent to Microsoft)
+**Env vars:** `EDGE_TTS_VOICE` (optional, default `vi-VN-HoaiMyNeural`; male option `vi-VN-NamMinhNeural`), `EDGE_TTS_FALLBACK_PIPER_MODEL` (optional, default `vi_VN-vais1000-medium`)
+
+```bash
+pip install edge-tts
+edge-tts --list-voices | grep vi-VN
+```
+
+Voice precedence: tool input `voice` / `voice_id`, then `EDGE_TTS_VOICE`, then the default. Output is mp3 on the Edge path and wav when the Piper fallback ran (`fallback_used` is set in the result). The ffmpeg loudnorm stage downstream is unchanged. The endpoint is unofficial and can change or rate-limit without notice.
+
+---
+
 ### Piper TTS — Offline Text-to-Speech
 
 > **Completely free, fully offline TTS.** No network required. Good quality for drafts and budget-constrained projects.
@@ -1442,6 +1459,7 @@ These tools require only FFmpeg or Python packages — no GPU, no API key.
 |----------|---------|---------------|------|
 | **Pexels** | `PEXELS_API_KEY` | `pexels_image`, `pexels_video` | Free |
 | **Pixabay** | `PIXABAY_API_KEY` | `pixabay_image`, `pixabay_video` | Free |
+| **Edge TTS** | — (`pip install edge-tts`) | `edge_tts` | Free |
 | **Piper** | — (install only) | `piper_tts` | Free |
 | **Azure AI Speech** | `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` | `azure_stt`, `azure_tts` | Free tier + paid |
 | **Google** | `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) | `google_tts`, `google_imagen`, `google_music`, `gemini_omni_video`, `veo_video` | Free tier (TTS) + paid |
