@@ -15,4 +15,5 @@ fastapi>=0.110
 uvicorn>=0.29
 watchfiles>=0.21
 
+edge-tts>=7.0         # free Edge neural TTS (edge_tts tool); Piper is the offline fallback
 websockets>=14.0       # Eleven v4 Turbo and realtime audio transports

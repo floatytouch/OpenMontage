@@ -710,6 +710,7 @@ class TestCapabilityMetadata:
             "mistral",
             "microsoft_mai",
             "azure",
+            "edge",
             "cartesia",
             "dashscope",
             "doubao",
