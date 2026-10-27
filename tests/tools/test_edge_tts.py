@@ -17,15 +17,20 @@ from tools.tool_registry import ToolRegistry
 FAKE_MP3 = b"\xff\xfb\x90\x00" + b"\x00" * 64
 
 
-def _install_fake_edge(monkeypatch, fail=False, record=None):
+def _install_fake_edge(monkeypatch, fail=False, record=None, partial_bytes=None, empty=False):
     class FakeCommunicate:
         def __init__(self, text, voice, **kwargs):
             if record is not None:
                 record.update(text=text, voice=voice, **kwargs)
 
         async def save(self, path):
+            if partial_bytes is not None:
+                Path(path).write_bytes(partial_bytes)
             if fail:
                 raise ConnectionError("no network")
+            if empty:
+                Path(path).write_bytes(b"")
+                return
             Path(path).write_bytes(FAKE_MP3)
 
     module = types.ModuleType("edge_tts")
@@ -113,3 +118,58 @@ def test_edge_failure_without_piper_fails_closed(monkeypatch, tmp_path):
     monkeypatch.setattr(EdgeTTS, "_piper", lambda self: _FakePiper(available=False))
     result = EdgeTTS().execute({"text": "x", "output_path": str(tmp_path / "a.mp3")})
     assert not result.success and "not installed" in result.error
+
+
+def test_partial_mp3_removed_before_piper_fallback(monkeypatch, tmp_path):
+    _install_fake_edge(monkeypatch, fail=True, partial_bytes=b"\xff\xfb" * 10)
+    monkeypatch.setattr(EdgeTTS, "_piper", lambda self: _FakePiper())
+    result = EdgeTTS().execute({"text": "x", "output_path": str(tmp_path / "a.mp3")})
+    assert result.success and result.data["fallback_used"] is True
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["a.wav"]
+
+
+def test_partial_mp3_removed_when_both_engines_fail(monkeypatch, tmp_path):
+    _install_fake_edge(monkeypatch, fail=True, partial_bytes=b"\xff\xfb" * 10)
+    monkeypatch.setattr(EdgeTTS, "_piper", lambda self: _FakePiper(succeed=False))
+    result = EdgeTTS().execute({"text": "x", "output_path": str(tmp_path / "a.mp3")})
+    assert not result.success
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_partial_mp3_removed_when_piper_unavailable(monkeypatch, tmp_path):
+    _install_fake_edge(monkeypatch, fail=True, partial_bytes=b"\xff\xfb" * 10)
+    monkeypatch.setattr(EdgeTTS, "_piper", lambda self: _FakePiper(available=False))
+    result = EdgeTTS().execute({"text": "x", "output_path": str(tmp_path / "a.mp3")})
+    assert not result.success
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_empty_edge_output_triggers_fallback_and_is_removed(monkeypatch, tmp_path):
+    _install_fake_edge(monkeypatch, empty=True)
+    piper = _FakePiper()
+    monkeypatch.setattr(EdgeTTS, "_piper", lambda self: piper)
+    result = EdgeTTS().execute({"text": "x", "output_path": str(tmp_path / "a.mp3")})
+    assert result.success and result.data["fallback_used"] is True
+    assert "produced no audio" in result.data["fallback_reason"]
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["a.wav"]
+
+
+def test_voice_id_alias_and_voice_beats_voice_id(monkeypatch, tmp_path):
+    seen = {}
+    _install_fake_edge(monkeypatch, record=seen)
+    EdgeTTS().execute({"text": "x", "voice_id": ALTERNATE_VOICE, "output_path": str(tmp_path / "a.mp3")})
+    assert seen["voice"] == ALTERNATE_VOICE
+    EdgeTTS().execute(
+        {"text": "x", "voice": DEFAULT_VOICE, "voice_id": ALTERNATE_VOICE, "output_path": str(tmp_path / "b.mp3")}
+    )
+    assert seen["voice"] == DEFAULT_VOICE
+
+
+def test_piper_model_precedence_input_over_env_over_default(monkeypatch, tmp_path):
+    _install_fake_edge(monkeypatch, fail=True)
+    piper = _FakePiper()
+    monkeypatch.setattr(EdgeTTS, "_piper", lambda self: piper)
+    monkeypatch.setenv(edge_module.PIPER_MODEL_ENV_VAR, "env-model")
+    EdgeTTS().execute({"text": "x", "output_path": str(tmp_path / "a.mp3")})
+    EdgeTTS().execute({"text": "x", "fallback_model": "input-model", "output_path": str(tmp_path / "b.mp3")})
+    assert [call["model"] for call in piper.calls] == ["env-model", "input-model"]

@@ -149,6 +149,7 @@ class EdgeTTS(BaseTool):
                 result = self._synthesize_with_edge(inputs, output_path)
             except Exception as exc:
                 edge_error = f"{type(exc).__name__}: {exc}"
+                output_path.unlink(missing_ok=True)
             else:
                 result.duration_seconds = round(time.time() - start, 2)
                 return result
